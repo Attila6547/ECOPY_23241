@@ -104,5 +104,5 @@ class ChiSquaredDistribution:
         else:
             raise Exception("Moment undefined")
 
-
+" Javított verzió "
 
