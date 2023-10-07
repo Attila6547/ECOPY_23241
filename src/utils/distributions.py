@@ -46,8 +46,11 @@ class LogisticDistribution:
         excess_kurtosis = self.ex_kurtosis()
         return [mean, variance, skewness, excess_kurtosis]
 
-import numpy as np
+import random
+import typing
+import math
 import scipy.special
+
 class ChiSquaredDistribution:
     def __init__(self, rand, dof):
         self.rand = rand
@@ -56,8 +59,8 @@ class ChiSquaredDistribution:
     def pdf(self, x):
         if x < 0:
             return 0
-        numerator = x ** ((self.dof / 2) - 1) * np.exp(-x / 2)
-        denominator = (2 ** (self.dof / 2)) * np.math.gamma(self.dof / 2)
+        numerator = x ** ((self.dof / 2) - 1) * math.exp(-x / 2)
+        denominator = (2 ** (self.dof / 2)) * scipy.special.gamma(self.dof / 2)
         return numerator / denominator
 
     def cdf(self, x):
@@ -95,10 +98,11 @@ class ChiSquaredDistribution:
         if self.dof > 1:
             mean = self.dof
             variance = 2 * self.dof
-            skewness = np.sqrt(8 / self.dof)
+            skewness = math.sqrt(8 / self.dof)
             kurtosis = 12 / self.dof
             return [mean, variance, skewness, kurtosis]
         else:
             raise Exception("Moment undefined")
+
 
 
