@@ -80,10 +80,10 @@ class ChiSquaredDistribution:
         return self.ppf(u)
 
     def mean(self):
-        if self.dof > 1:
+        try:
             return self.dof
-        else:
-            raise Exception("Moment undefined")
+        except:
+            raise ValueError("Moment undefined")
 
     def variance(self):
         return 2 * self.dof
@@ -95,14 +95,14 @@ class ChiSquaredDistribution:
         return 12 / self.dof
 
     def mvsk(self):
-        if self.dof > 1:
-            mean = self.dof
-            variance = 2 * self.dof
-            skewness = math.sqrt(8 / self.dof)
-            kurtosis = 12 / self.dof
-            return [mean, variance, skewness, kurtosis]
-        else:
-            raise Exception("Moment undefined")
+        mean = self.mean()
+        variance = self.variance()
+        skewness = self.skewness()
+        ex_kurtosis = self.ex_kurtosis()
+        try:
+            return [mean, variance, skewness, ex_kurtosis]
+        except:
+            raise ValueError("Moment undefined")
 
 " Javított verzió "
 
