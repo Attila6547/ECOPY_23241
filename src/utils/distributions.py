@@ -106,3 +106,8 @@ class ChiSquaredDistribution:
 
 " Javított verzió "
 
+class UniformDistribution:
+    pass
+
+class CauchyDistribution:
+    pass
