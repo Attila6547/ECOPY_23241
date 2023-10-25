@@ -68,3 +68,4 @@ class TestLinearRegressionSM:
 
         # Assert
         assert result == approx(expected)
+
