@@ -32,7 +32,6 @@ class LinearRegressionSM:
         by = round(self._model.bic, 3)
         return f'Adjusted R-squared: {ars}, Akaike IC: {ak}, Bayes IC: {by}'
 
-
 import pandas as pd
 import numpy as np
 from scipy.stats import t, f
@@ -45,50 +44,47 @@ class LinearRegressionNP:
     def fit(self):
         X = np.column_stack([np.ones(len(self.right_hand_side)), self.right_hand_side])
         y = self.left_hand_side
-        self.beta = np.linalg.inv(X.T @ X) @ X.T @ y
+        beta = np.linalg.inv(X.T.dot(X)).dot(X.T).dot(y)
+        alpha = beta[0]
+        beta = beta[1:]
+        self.alpha = alpha
+        self.beta = beta
 
     def get_params(self):
-        return pd.Series({'Beta coefficients': self.beta.tolist()})
+        return pd.Series(self.beta, name = "Beta coefficients")
 
     def get_pvalues(self):
-        residuals = self.left_hand_side - (self.right_hand_side @ self.beta)
-        sigma2 = np.sum(residuals**2) / (len(self.right_hand_side) - 2)
         X = np.column_stack([np.ones(len(self.right_hand_side)), self.right_hand_side])
-        XTX_inv = np.linalg.inv(X.T @ X)
-        se = np.sqrt(sigma2 * np.diag(XTX_inv))
-        t_stat = self.beta / se
-        p_values = (1 - t.cdf(np.abs(t_stat), df=len(self.right_hand_side) - 2)) * 2
-        return pd.Series({'P-values for the corresponding coefficients': p_values})
+        y = self.left_hand_side.values
+        n, k = X.shape
+        df = n - k
+        residuals = y - X.dot(np.concatenate(([self.alpha], self.beta)))
+        sigma = np.sqrt((residuals.dot(residuals)) / df)
+        se = np.sqrt(np.diagonal(sigma ** 2 * np.linalg.inv(X.T.dot(X))))
+        t_stats = np.concatenate(([self.alpha / se[0]], self.beta / se[1:]))
+        p_values = pd.Series([2 * (1 - stats.t.cdf(np.abs(t), df)) for t in t_stats],name="P-values for the corresponding coefficients")
+        self.p_values = p_values
+        return p_values
 
     def get_wald_test_result(self, R):
-        if len(R[0]) != len(self.beta):
-            raise ValueError("Matrices are not aligned")
-        wald_statistic = ((R @ self.beta) ** 2) / (R @ np.linalg.inv(self.right_hand_side.T @ self.right_hand_side) @ R.T)
-        p_value = 1 - t.cdf(wald_statistic, df=len(R), loc=0, scale=1)
-        return f'Wald: {wald_statistic:.3f}, p-value: {p_value:.3f}'
+        wald_value = ((np.array(restriction_matrix).dot(np.concatenate(([self.alpha], self.beta)))) ** 2).sum()
+        df_num = np.array(restriction_matrix).shape[0]
+        df_denom = len(self.right_hand_side) - len(restriction_matrix)
+        p_value = 1 - stats.f.cdf(wald_value, df_num, df_denom)
+        result_string = f"Wald: {wald_value:.3f}, p-value: {p_value:.3f}"
+        return result_string
 
     def get_model_goodness_values(self):
+        X = np.column_stack([np.ones(len(self.right_hand_side)), self.right_hand_side])
         y = self.left_hand_side
+        n, k = X.shape
+        df_residuals = n - k
+        df_total = n - 1
         y_mean = np.mean(y)
-        y_pred = self.right_hand_side @ self.beta
-        centered_r_squared = 1 - np.sum((y - y_pred) ** 2) / np.sum((y - y_mean) ** 2)
-        n = len(self.right_hand_side)
-        p = 2
-        adjusted_r_squared = 1 - (1 - centered_r_squared) * (n - 1) / (n - p - 1)
+        y_pred = X.dot(np.concatenate(([self.alpha], self.beta)))
+        ss_residuals = np.sum((y - y_pred) ** 2)
+        ss_total = np.sum((y - y_mean) ** 2)
+        centered_r_squared = 1 - (ss_residuals / ss_total)
+        adjusted_r_squared = 1 - (ss_residuals / df_residuals) / (ss_total / df_total)
         return f'Centered R-squared: {centered_r_squared:.3f}, Adjusted R-squared: {adjusted_r_squared:.3f}'
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
