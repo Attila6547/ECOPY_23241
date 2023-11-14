@@ -40,6 +40,10 @@ class LinearRegressionNP:
     def __init__(self, left_hand_side, right_hand_side):
         self.left_hand_side = left_hand_side
         self.right_hand_side = right_hand_side
+        self.alpha = None
+        self.beta = None
+        self.p_values = None
+        self._model = None
 
     def fit(self):
         X = np.column_stack([np.ones(len(self.right_hand_side)), self.right_hand_side])
@@ -49,9 +53,12 @@ class LinearRegressionNP:
         beta = beta[1:]
         self.alpha = alpha
         self.beta = beta
+        X = sm.add_constant(self.right_hand_side)
+        model = sm.OLS(self.left_hand_side, X).fit()
+        self._model = model
 
     def get_params(self):
-        return pd.Series(self.beta, name = "Beta coefficients")
+        return pd.Series(self._model.params, name='Beta coefficients')
 
     def get_pvalues(self):
         X = np.column_stack([np.ones(len(self.right_hand_side)), self.right_hand_side])
