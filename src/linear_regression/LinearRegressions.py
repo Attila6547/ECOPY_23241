@@ -95,3 +95,86 @@ class LinearRegressionNP:
         adjusted_r_squared = 1 - (ss_residuals / df_residuals) / (ss_total / df_total)
         return f'Centered R-squared: {centered_r_squared:.3f}, Adjusted R-squared: {adjusted_r_squared:.3f}'
 
+
+import pandas as pd
+import statsmodels.api as sm
+import numpy as np
+import scipy
+
+class LinearRegressionGLS:
+    def __init__(self, left_hand_side, right_hand_side):
+        self.left_hand_side = left_hand_side
+        self.right_hand_side = right_hand_side
+        self.right_hand_side = sm.add_constant(self.right_hand_side)
+        self._model = None
+
+    def fit(self):
+        _model = sm.GLS(self.left_hand_side, self.right_hand_side).fit()
+
+    def get_params(self):
+        self.a = np.dot(np.transpose(self.right_hand_side), self.right_hand_side)
+        self.b = np.dot(np.transpose(self.right_hand_side), self.left_hand_side)
+        self.params = np.dot(np.linalg.inv(self.a), self.b)
+        self.resid = self.left_hand_side - np.dot(self.right_hand_side, self.params)
+
+        self.resid_sq = self.resid ** 2
+        self.log_resid_sq = np.log(self.resid_sq)
+        self.a_residsq_regr = np.dot(np.transpose(self.right_hand_side), self.right_hand_side)
+        self.b_residsq_regr = np.dot(np.transpose(self.right_hand_side),
+                                     self.log_resid_sq)
+        self.params_residsq_regr = np.dot(np.linalg.inv(self.a_residsq_regr), self.b_residsq_regr)
+
+        self.resid_3rd = np.dot(self.right_hand_side, self.params_residsq_regr)
+        self.resid_3rd_unlogged = np.sqrt(np.exp(self.resid_3rd))
+        self.resid_3rd_unlogged_inv = 1 / self.resid_3rd_unlogged
+        self.Vinv = (np.diag(self.resid_3rd_unlogged_inv))
+        self.FGLS_a = np.dot(np.dot(np.transpose(self.right_hand_side), self.Vinv), self.right_hand_side)
+        self.FGLS_b = np.dot(np.dot(np.transpose(self.right_hand_side), self.Vinv), self.left_hand_side)
+
+        self.FGLS_params = np.dot(np.linalg.inv(self.FGLS_a), self.FGLS_b)
+
+        return pd.Series(self.FGLS_params, name='Beta coefficients')
+
+    def get_pvalues(self):
+        self.get_params()
+        self.a_inv = np.linalg.inv(self.FGLS_a)
+        self.errors = self.left_hand_side - np.dot(self.right_hand_side, self.FGLS_params)
+        self.n = len(self.left_hand_side)
+        self.p = len(self.right_hand_side.columns)
+        self.var = np.dot(np.transpose(self.errors), self.errors) / (self.n - self.p)
+        self.se_sq = self.var * np.diag(self.a_inv)
+        self.se = np.sqrt(self.se_sq)
+        self.t_stats = np.divide(self.FGLS_params, self.se)
+        term = np.minimum(scipy.stats.t.cdf(self.t_stats, self.n - self.p),
+                          1 - scipy.stats.t.cdf(self.t_stats, self.n - self.p))
+        p_values = (term) * 2
+        return pd.Series(p_values, name='P-values for the corresponding coefficients')
+
+    def get_wald_test_result(self, restr_matrix):
+        self.get_params()
+        self.get_pvalues()
+        r = np.transpose(np.zeros((len(restr_matrix))))
+        term_1 = np.dot(restr_matrix, self.FGLS_params) - r
+        term_2 = np.dot(np.dot(restr_matrix, self.a_inv), np.transpose(restr_matrix))
+        f_stat = (np.dot(np.transpose(term_1), np.dot(np.linalg.inv(term_2), term_1)) / len(restr_matrix)) / self.var
+        p_value = (1 - scipy.stats.f.cdf(f_stat, len(restr_matrix), self.n - self.p))
+        f_stat.astype(float)
+        p_value.astype(float)
+        return f'Wald: {f_stat:.3f}, p-value: {p_value:.3f}'
+
+    def get_model_goodness_values(self):
+        self.get_params()
+        self.get_pvalues()
+        self.errors = self.left_hand_side - np.dot(self.right_hand_side, self.FGLS_params)
+
+        y_demean = self.left_hand_side
+        w = np.dot(np.dot(np.transpose(y_demean), self.Vinv), y_demean)
+        SSE_1 = np.dot(np.dot(np.transpose(self.left_hand_side), self.Vinv), self.right_hand_side)
+        SSE_2 = np.dot(np.dot(np.transpose(self.right_hand_side), self.Vinv), self.right_hand_side)
+        SSE_3 = np.dot(np.dot(np.transpose(self.right_hand_side), self.Vinv), self.left_hand_side)
+        SSE = np.dot(np.dot(SSE_1, np.linalg.inv(SSE_2)), np.transpose(SSE_1))
+        SST = w
+        r2 = 1 - SSE / SST
+        adj_r2 = 1 - (self.n - 1) / (self.n - self.p) * (1 - r2)
+        return f'Centered R-squared: {r2:.3f}, Adjusted R-squared: {adj_r2:.3f}'
+
