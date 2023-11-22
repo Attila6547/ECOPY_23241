@@ -178,3 +178,70 @@ class LinearRegressionGLS:
         adj_r2 = 1 - (self.n - 1) / (self.n - self.p) * (1 - r2)
         return f'Centered R-squared: {r2:.3f}, Adjusted R-squared: {adj_r2:.3f}'
 
+
+import pandas as pd
+from scipy.optimize import minimize
+import numpy as np
+from statsmodels.tools.tools import add_constant
+
+class LinearRegressionML:
+    def __init__(self, left_hand_side, right_hand_side):
+        self.left_hand_side = left_hand_side
+        self.right_hand_side = right_hand_side
+        self.right_hand_side = add_constant(self.right_hand_side)
+
+        self._params = None
+
+    def fit(self):
+        def neg_log_likelihood(params, X, y):
+            predicted = np.dot(X, params)
+            log_likelihood = -0.5 * (np.log(2 * np.pi * np.var(y)) + np.sum((y - predicted) ** 2) / np.var(y))
+            return -1 * log_likelihood
+
+        initial_params = np.zeros(self.right_hand_side.shape[1]) + 0.1
+
+        result = minimize(neg_log_likelihood, initial_params, args=(self.right_hand_side, self.left_hand_side), method='L-BFGS-B')
+
+        if result.success:
+            self._params = result.x
+        else:
+            raise ValueError("MLE fit failed!")
+
+    def get_params(self):
+        if self._params is not None:
+            return pd.Series(self._params, index=self.right_hand_side.columns, name='Beta coefficients')
+        else:
+            raise ValueError("Fit the model first!")
+
+    def get_pvalues(self):
+        if self._params is not None:
+            X = add_constant(self.right_hand_side.iloc[:, 1:]) if 'const' not in self.right_hand_side.columns else self.right_hand_side
+
+            residuals = self.left_hand_side - np.dot(X, self._params)
+            n = len(self.left_hand_side)
+            p = X.shape[1]
+            var = np.sum(residuals ** 2) / (n - p)
+            cov_matrix = var * np.linalg.inv(np.dot(X.T, X))
+
+            se = np.sqrt(np.diag(cov_matrix))
+            t_stats = self._params / se
+
+            p_values = [min(t.cdf(-np.abs(t_stat), df=n-p)*2, t.cdf(np.abs(t_stat), df=n-p)*2) for t_stat in t_stats]
+
+            return pd.Series(p_values, index=X.columns, name='P-values for the corresponding coefficients')
+        else:
+            raise ValueError("Fit the model first!")
+
+    def get_model_goodness_values(self):
+        if self._params is not None:
+            residuals = self.left_hand_side - np.dot(self.right_hand_side, self._params)
+            SSE = np.sum(residuals ** 2)
+            SST = np.sum((self.left_hand_side - np.mean(self.left_hand_side)) ** 2)
+            r_squared = 1 - (SSE / SST)
+            adj_r_squared = 1 - (1 - r_squared) * (len(self.left_hand_side) - 1) / (len(self.left_hand_side) - len(self.right_hand_side.columns))
+            return f'Centered R-squared: {r_squared:.3f}, Adjusted R-squared: {adj_r_squared:.3f}'
+        else:
+            raise ValueError("Fit the model first!")
+
+
+
